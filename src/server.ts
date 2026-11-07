@@ -6,11 +6,14 @@ import {Store} from './store.js';
 import {Model} from './model.js';
 import {Notify,Notifications} from './notify.js';
 import {Approvals} from './approval.js';
-import {AppError,assert,equal,identifier} from './core.js';
+import {Budgets} from './budget.js';
+import {BudgetApprovals} from './budget-approval.js';
+import {AppError,assert,equal,identifier,deterministic} from './core.js';
 export interface ServerOptions {store:Store;model:Model;notify:Notify;ingestToken:string;webDir:string;outputDir:string;notifications?:boolean}
 export function makeApp(o:ServerOptions){
  const csrf=randomBytes(32).toString('hex'),browserSession=randomBytes(32).toString('hex');
  const approvals=new Approvals(o.store,o.notify,o.outputDir),notifications=new Notifications(o.store,o.notify,o.notifications);
+ const budgets=new Budgets(o.store),budgetApprovals=new BudgetApprovals(budgets,o.notify);
  const inFlight=new Set<Promise<unknown>>();let activeQuestions=0;
  const background=(p:Promise<unknown>)=>{inFlight.add(p);void p.catch(()=>{}).finally(()=>inFlight.delete(p))};
  function json(res:ServerResponse,status:number,body:unknown){res.writeHead(status,{'Content-Type':'application/json; charset=utf-8'});res.end(JSON.stringify(body))}
@@ -38,12 +41,22 @@ export function makeApp(o:ServerOptions){
  if(route==='/api/health')return json(res,200,{ok:true,storage:'sqlite',belweave:{state:o.model.lastStatus,lastCheckedAt:o.model.lastCheckedAt,model:o.model.config.model??'Belweave/Kai-4',detail:o.model.lastFailure??(o.model.config.key?'Server-side key configured; last request result shown':'Server-side key missing')},notify:o.notify.health,notifications:{enabled:notifications.enabled(),lastAttempt:o.store.db.prepare('SELECT state,created FROM notifications ORDER BY created DESC LIMIT 1').get()??null,detail:'Samples never send. Accepted pushes do not prove delivery.'},telemetry:{state:o.store.sessions().some(s=>!s.simulated&&s.eventCount>0)?'configured':'unconfigured',detail:'Authenticated intake ready. Cursor hook runtime unverified; no automatic Codex or T3 telemetry.'}});
  if(route==='/api/bootstrap'){res.setHeader('Set-Cookie',`ap_session=${browserSession}; HttpOnly; SameSite=Strict; Path=/`);return json(res,200,{csrf})}
  if(route==='/api/sessions')return json(res,200,o.store.sessions());
- const m=route.match(/^\/api\/sessions\/([\w-]+)$/);if(m)return json(res,200,{...o.store.snapshot(m[1]!),decisions:approvals.list(m[1]!)});
+ const m=route.match(/^\/api\/sessions\/([\w-]+)$/);if(m)return json(res,200,{...o.store.snapshot(m[1]!),decisions:approvals.list(m[1]!),budget:budgets.snapshot(m[1]!),budgetExtensions:budgetApprovals.list(m[1]!)});
  const files:Record<string,[string,string]>={'/':['index.html','text/html'],'/app.js':['app.js','text/javascript'],'/style.css':['style.css','text/css']};
  const f=files[route];if(f){const bytes=readFileSync(join(o.webDir,f[0]));res.writeHead(200,{'Content-Type':`${f[1]}; charset=utf-8`});res.end(bytes);return}
  throw new AppError(404,'Not found');
  }
  assert(req.method==='POST','Method not supported',405);
+ const ledger=route.match(/^\/api\/budgets\/([\w-]+)\/(checkpoint|reserve|reconcile|uncertain)$/);
+ if(ledger){
+ const auth=req.headers.authorization;assert(typeof auth==='string'&&equal(auth,`Bearer ${o.ingestToken}`),'Invalid adapter authentication',401);
+ const input=await body(req);const session=ledger[1]!;let result:unknown;
+ if(ledger[2]==='checkpoint')result=budgets.checkpoint(session,input);
+ else if(ledger[2]==='reserve')result=budgets.reserve(session,input);
+ else if(ledger[2]==='reconcile')result=budgets.reconcile(session,input);
+ else result=budgets.uncertain(session,input);
+ background(notifications.budgetAlerts());return json(res,200,result);
+ }
  if(route==='/api/events'){
  const auth=req.headers.authorization;assert(typeof auth==='string'&&equal(auth,`Bearer ${o.ingestToken}`),'Invalid ingest authentication',401);
  const result=o.store.ingest(await body(req));if(!result.duplicate&&result.latest)background(notifications.event(result.event));return json(res,result.duplicate?200:201,{accepted:true,duplicate:result.duplicate,latest:result.latest});
@@ -51,19 +64,29 @@ export function makeApp(o:ServerOptions){
  browser(req);const b=await body(req);assert(b&&typeof b==='object'&&!Array.isArray(b),'Expected JSON object');
  if(route==='/api/question'){
  assert(identifier(b.sessionId)&&typeof b.question==='string'&&b.question.trim().length>0&&b.question.length<=500,'Session and question (1–500 chars) required');assert(b.modelEnabled===undefined||typeof b.modelEnabled==='boolean','Invalid model option');assert(activeQuestions<2,'Too many active questions',429);
- const snapshot=o.store.snapshot(b.sessionId);activeQuestions++;try{return json(res,200,await o.model.answer(snapshot,b.question,b.modelEnabled!==false))}finally{activeQuestions--}
+ const snapshot=o.store.snapshot(b.sessionId);const budget=budgets.snapshot(b.sessionId);
+ if(budget.configured||/token|budget|allowance|allowed|remaining|paused|pause|usage|daily|spent|spend|quota|limit|left/i.test(b.question)){
+ const record=deterministic(snapshot)+' '+budget.summary;return json(res,200,{record,answer:record,source:'stored-token-ledger',fallback:false,reason:'Read-only deterministic token ledger; no model call or permission change',answeredAt:new Date().toISOString()});
  }
+ activeQuestions++;try{return json(res,200,await o.model.answer(snapshot,b.question,b.modelEnabled!==false))}finally{activeQuestions--}
+ }
+ const allocate=route.match(/^\/api\/budgets\/([\w-]+)\/allocate$/);
+ if(allocate)return json(res,201,budgets.configure(allocate[1]!,b));
+ const extensions=route.match(/^\/api\/budgets\/([\w-]+)\/extensions$/);
+ if(extensions){const d=budgetApprovals.create(extensions[1]!,b);if(!d.simulated)background(budgetApprovals.request(d.id));return json(res,201,d)}
+ const extensionAction=route.match(/^\/api\/budget-extensions\/([a-f0-9]{64})\/(simulate|cancel)$/);
+ if(extensionAction){assert(identifier(b.sessionId),'Session required');return json(res,200,extensionAction[2]==='simulate'?budgetApprovals.simulate(extensionAction[1]!,b.sessionId,b.outcome):budgetApprovals.cancel(extensionAction[1]!,b.sessionId))}
  if(route==='/api/decisions'){
  assert(identifier(b.sessionId)&&typeof b.simulated==='boolean','Session and simulated flag required');assert(Object.keys(b).every(k=>['sessionId','simulated'].includes(k)),'Action parameters cannot be supplied');
  const d=approvals.create(b.sessionId,b.simulated);if(!d.simulated)background(approvals.request(d.id));return json(res,201,d);
  }
  const decision=route.match(/^\/api\/decisions\/([a-f0-9]{64})\/(simulate|cancel)$/);
  if(decision){assert(identifier(b.sessionId),'Session required');return json(res,200,decision[2]==='simulate'?approvals.simulate(decision[1]!,b.sessionId,b.outcome):approvals.cancel(decision[1]!,b.sessionId))}
- if(route==='/api/notify/check')return json(res,200,await o.notify.check());
- if(route==='/api/notifications'){assert(typeof b.enabled==='boolean','Enabled flag required');o.store.setSetting('notifications',String(b.enabled));return json(res,200,{enabled:notifications.enabled()})}
+ if(route==='/api/notify/check'){const state=await o.notify.check();background(notifications.budgetAlerts());return json(res,200,state)}
+ if(route==='/api/notifications'){assert(typeof b.enabled==='boolean','Enabled flag required');o.store.setSetting('notifications',String(b.enabled));if(b.enabled)background(notifications.budgetAlerts());return json(res,200,{enabled:notifications.enabled()})}
  throw new AppError(404,'Not found');
  }catch(e){const status=e instanceof AppError?e.status:500;json(res,status,{error:e instanceof AppError?e.message:'Internal operation failed; no approval granted'})}
  });
  server.requestTimeout=25_000;server.headersTimeout=10_000;
- return {server,approvals,notifications,inFlight,handle:server.listeners('request')[0]! as (req:IncomingMessage,res:ServerResponse)=>Promise<void>};
+ return {server,approvals,budgets,budgetApprovals,notifications,inFlight,handle:server.listeners('request')[0]! as (req:IncomingMessage,res:ServerResponse)=>Promise<void>};
 }
