@@ -10,7 +10,7 @@ Three different things have to stay separate.
 
 **Status** comes only from events that were recorded for that session: a type, a time, a sequence, and a short summary. SpeakSeek reports the latest recorded state and how fresh that evidence is. A spoken or typed answer describes that record. The answer does not start work, resume work, or approve anything.
 
-**Voice** is how you ask. In the intended at-home experience, you would ask out loud and hear the recorded status back. In this MVP, you ask in the browser: type the question, or use the browser’s own speech recognition when that browser offers it, then read the text before you submit. Read-aloud uses the browser’s speech synthesis. None of that is a phone approval.
+**Voice** is how you ask. In the intended at-home experience, you would ask out loud and hear the recorded status back. In this MVP, you ask in the browser: type the question, or use the browser’s own speech recognition when that browser offers it, then read the text before you submit. Read-aloud uses the browser’s speech synthesis. If the computer has selected AirPods as its microphone and speaker, those controls use them. The page does not wake on “Hey Agent X”. On the same Mac, a shortcut you create can use Apple’s “Hey Siri” or “Siri”, then the shortcut’s name, to speak one recorded status from the loopback server. An iPhone cannot reach that server. None of that is a phone approval.
 
 **Phone approval** is a separate, explicit decision about one exact action. The phone message has to describe that action. Approving it can allow only that action, once, while it is still in time. A status reply never counts as approval. Denying, ignoring until expiry, or hitting an error leaves the action blocked.
 
