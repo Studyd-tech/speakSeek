@@ -30,11 +30,11 @@ You are at home, away from the computer. Your task is named Agent X.
 
 > **You:** Hey Google, give me a status update on Agent X.
 >
-> **Intended reply:** Agent X last recorded “checks passed for the retry change” at 6:42 PM. That evidence is stale, so current progress is unknown. Nothing is waiting on you.
+> **Intended reply:** Agent X last recorded “checks passed for the retry change” at 6:42 PM CST (an example time). That evidence is stale, so current progress is unknown. Nothing in this status reply approves or starts work.
 
 You go back to what you were doing. Later the task reaches a point that needs a decision. Your phone gets a Notify approval. The message names the session, the exact action, the parameter fingerprint, a one-time nonce, and the expiry. It is not a vague “Agent X wants to continue.”
 
-> **Phone:** Agent X is asking to create one demo timestamp file. That is the only action in this request. It expires at 6:58 PM.
+> **Phone (intended Notify prompt, example time):** Create one demo timestamp file for Agent X. That is the only action in this request. It expires at 6:58 PM CST.
 
 You approve on the phone, put it down, and return to your own activity. You do not sit at the computer. Later you ask again.
 
@@ -48,7 +48,7 @@ A second decision shows up. It is a different action, with its own nonce and exp
 >
 > **Intended reply, if no completion was stored:** No. The last recorded state is not a completion. I won’t say it is almost done.
 >
-> **Intended reply, if a completion event was stored:** A completion was recorded at 7:16 PM, with this summary. That confirms the recorded event, not a new inspection of the work.
+> **Intended reply, if a completion event was stored:** A completion was recorded at 7:16 PM CST (an example time), with this summary. That confirms the recorded event, not a new inspection of the work. A second, different approval still needs its own phone decision. The first yes does not cover it.
 
 If the evidence is stale at that last question, the reply still says so. If the session is empty, the reply is unknown.
 
