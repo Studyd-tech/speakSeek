@@ -1,5 +1,17 @@
 # Observed verification — 2026-11-07
 
+## This SpeakSeek checkout (about 1:57 PM CST)
+
+Node **v24.22.1**. `npm run typecheck` passed after one type-only correction in `src/notify.ts` so a numeric Notify exit code remains comparable to `3`. `npm test` then reported **50 passed, 0 failed, 0 skipped**, including the loopback HTTP/restart test and the real child-process CLI test. Those two were the tests the Codex sandbox had skipped.
+
+A loopback server was started with no Belweave key and with `NOTIFY_BIN` pointed at a path that does not exist, so no phone request was sent. `GET /` and `GET /api/health` returned 200. Health reported SQLite, Belweave unconfigured, and Notify “CLI not installed.” The homepage HTML included SpeakSeek and did not include the ingest token. The token file mode was `0600`.
+
+Observed session data: Checkout recovery was a fresh SIMULATED sample in state `decision` with 4 events; Search accessibility was a stale `completed` sample; API contract check was a stale `failed` sample; “No events yet” was `unknown`; Local phone-gate demo had no events. A model-off question returned `STORED-EVENT` fallback text. Simulated approve, deny, and timeout persisted as executed `0` with SIMULATED reasons. A real decision on a sample returned 409. A real decision on Local phone-gate demo ended `failed` / “Notify CLI not installed” / executed `0`. `demo-output/` stayed empty. Nine events were readable in `.local/agentpulse.sqlite` (WAL). Startup recovery fail-closes decisions still in `pending` or `approved`; that behavior was observed.
+
+Not done in this checkout: browser click-through and screenshots, a live Belweave request, microphone or audible speech, and any SpeakSeek phone approval round trip. A Notify CLI self-test accepted outside this app is not that round trip. There is no hosted deployment.
+
+## Codex workspace record
+
 ## Codex workspace record
 
 The notes in this section are the original Codex execution record shipped with the source archive. They describe that sandbox, not the SpeakSeek GitHub checkout. This checkout’s results are appended below when local checks finish.

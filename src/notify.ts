@@ -6,7 +6,7 @@ export type Runner=(args:string[],timeout:number)=>Promise<CliResult>;
 export function cliRunner(bin='notify',execute:typeof execFile=execFile):Runner{return (args,timeout)=>new Promise(resolve=>{
  execute(bin,args,{timeout,maxBuffer:64*1024,encoding:'utf8',shell:false},(error,stdout,stderr)=>{
  let body:any;try{body=JSON.parse(stdout)}catch{}
- const e=error as (NodeJS.ErrnoException&{killed?:boolean})|null;
+ const e=error as {code?:string|number;killed?:boolean}|null;
  const code=typeof e?.code==='number'?e.code:error?1:0;
  const reason=e?.code==='ENOENT'?'missing':e?.killed?'timeout':code===3||/No token configured/.test(stderr)?'credentials':error?'service':body===undefined?'malformed':undefined;
  resolve({code,body,error:reason});

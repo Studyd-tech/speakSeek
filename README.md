@@ -1,175 +1,198 @@
 # SpeakSeek
 
-SpeakSeek is a local dashboard answering “How is my coding agent/task doing?” from durable recorded events. It includes session selection, timestamps and freshness, a timeline, typed questions, optional browser voice input/read-aloud, Belweave evidence selection, and a fixed phone-approved demo action.
+**Ask your coding agent how it's doing. Approve exactly one bounded action from your phone. Get back to your life.**
 
-**Product story:** [PRODUCT.md](PRODUCT.md) explains the at-home vision in plain language, including a hypothetical “Hey Google” walkthrough, and separates that vision from what this MVP does.
+**Product story:** [PRODUCT.md](PRODUCT.md) is the same vision in plain language. This README is the piece a judge can read alone.
 
-The visible name is SpeakSeek. This application was imported from a Codex build named AgentPulse. Runtime identifiers are unchanged (`agentpulse` package name, `AGENTPULSE_*` environment variables, the SQLite filename, and the browser CSRF header) so existing adapters keep working.
+SpeakSeek is a status and approval layer for a coding task you already named. It keeps a durable, timestamped record of what that task has actually reported. It answers spoken or typed questions only from that record. When a human decision is needed, Notify is the phone channel for one precise, one-time approval. The official setup is the [Notify quickstart](https://notify.belweave.ai/docs/quickstart).
 
-**Import provenance:** the application source is the Codex allowlisted archive `agentpulse-source.tar.gz`, SHA-256 `0099603f418ca57de97efb1ac7e4472eb4ceaba8a81d2bf9edde94fd15fc0e7f`. The comparison production archive `agentpulse-production.tar.gz` is SHA-256 `8fa85da4e1a7f5f8417005114900b602ea65f8d3a051b1de7219400e71a78170`. Paths were relative, with no symlinks. No `.env`, token file, database, log, or `node_modules` tree was committed. `.env.example` has placeholders only.
+It was built for **Notify Weekend 01** on [justship.dev](https://justship.dev/notify-weekend-1). The visible name is SpeakSeek. The imported application was built as AgentPulse. Runtime identifiers stay as they were (`agentpulse` package, `AGENTPULSE_*` variables, the SQLite filename, and the browser CSRF header).
 
-**Prior Codex check, not this checkout:** that sandbox’s production build succeeded; 48 tests passed and 2 transport tests were skipped because sockets and subprocesses were denied. Typecheck, the live server, and browser launch were blocked there. See the Codex section of [VERIFICATION.md](VERIFICATION.md). Results from this SpeakSeek checkout are appended in that file when they are run. This is a local MVP, not a hosted service and not a verified phone or model integration.
+**Source provenance:** the application is the Codex allowlisted archive `agentpulse-source.tar.gz`, SHA-256 `0099603f418ca57de97efb1ac7e4472eb4ceaba8a81d2bf9edde94fd15fc0e7f`. The comparison production archive is SHA-256 `8fa85da4e1a7f5f8417005114900b602ea65f8d3a051b1de7219400e71a78170`. Paths were relative, with no symlinks. No `.env`, token, database, log, or `node_modules` tree was committed. `.env.example` is placeholders only.
 
-## Run
+---
 
-Use Node **24.22.1 or newer** with built-in SQLite and TypeScript transformation. No runtime npm packages are required. Run commands from this directory.
+## The idea, in one kitchen
+
+You've asked a coding agent to work through a task. Call it **Agent X**, the name you gave the task. Agent X is not the X social network. It might later be a Grok Bot or Codex task. Today it is a session of recorded events. Then you've walked away from your desk to cook dinner.
+
+> **Product vision. Hypothetical dialogue. Google Assistant, Hey Google, and any speaker path are not built and were not verified. No particular Google mechanism is claimed. Clock times below are examples (CST), not a recorded run.**
+>
+> **You:** "Hey Google, give me a status update on Agent X."
+> **Assistant:** "Agent X's last recorded state is *waiting on approval*, from about four minutes ago: it wants a decision on the checkout retry change. That evidence is stale, so I can't say what it is doing now. I am not approving anything. If a phone decision is pending, it is a separate Notify prompt, not this reply."
+>
+> *Your phone, separately, shows a Notify prompt naming the task, the exact action, and when the request expires. You tap **Approve** and go back to stirring the sauce. That tap is the approval. The spoken status was not.*
+>
+> **You, later:** "Hey Google, how's Agent X now?"
+> **Assistant:** "Agent X recorded progress after that: tests are passing. A second, different approval is waiting, with its own expiry. The first yes does not cover it. If this newer evidence is also stale, current progress is unknown."
+>
+> *The new prompt is bound to a different action. You approve it, deny it, or let it expire on its own.*
+>
+> **You, after dinner:** "Hey Google, is it done?"
+> **Assistant, only if a completion event is stored:** "A completion was recorded at 7:12 PM CST. That confirms the recorded event, not a new inspection of the work."
+> **Assistant, if no completion was stored:** "No. The last recorded state is not a completion. I won't say it is almost done."
+
+Three things in that dialogue are the product:
+
+1. **The answer is a report, not a guess.** SpeakSeek says what was last recorded and when. **Fresh** means the newest evidence is at most two minutes old, using the earlier of the event time and the time the server stored it. **Stale** means older evidence is on record: the last state and time are reported, and current progress is unknown. **Unknown** means the session has no events. Empty is not "working." Silence is not progress. It never invents percentages or "almost done."
+2. **The approval is narrow.** It covers one action, for one session, once, before it expires. A second step needs a second approval. A voice or typed answer never authorizes execution.
+3. **"Done" requires evidence.** SpeakSeek only says a task is complete after a completion event has been recorded. That means completion was recorded, not that SpeakSeek re-ran the work.
+
+## The problem
+
+Coding agents now run long enough that you start walking away from them. Then you face two bad options:
+
+- **Babysit the terminal**, checking back every few minutes to see whether the agent is stuck, finished, or waiting on you.
+- **Grant broad autonomy**, so it never needs to ask, and hope nothing important happens without you.
+
+Neither fits real life. Most of the time you don't need a live feed. You need an honest answer to "where is it?" and, occasionally, a precise yes-or-no decision.
+
+**Who it's for:**
+
+- Developers running agents on long tasks
+- Solo builders who step away mid-task
+- Teams that want a human decision on specific steps without turning autonomy off entirely
+
+## Why Notify is central, not decoration
+
+Status alone could be a dashboard. Approval is what requires a phone. Notify is the human-bound decision channel away from the desk:
+
+- **Approve or deny prompts** return a decision the server can check. A push you might have glanced at is not approval. Accepted or queued is not "seen."
+- **Expiry, cancellation, timeout, a wrong reply, a late reply, and errors never count as approval.** SpeakSeek enforces that on its side before any gated file is written.
+- **Phone alerts for moments that matter are a separate opt-in:** completion, failure, and decisions. Routine progress does not buzz your pocket. Samples never send. The default is off.
+
+A Notify CLI check or a test push that succeeded outside this app is not an end-to-end SpeakSeek approval. This repository does not log in, send a push, or contact a phone by being published.
+
+## What's actually built
+
+SpeakSeek runs locally as a Node web app on `127.0.0.1`, with a dashboard, an event API, and one fixed approval gate. This checkout started that server and called its HTTP API. A full browser click-through was not finished. There is no hosted deployment.
+
+| Capability | Status |
+|---|---|
+| Durable per-session event record (SQLite, WAL) with ordering, duplicate rejection, and session isolation | **Built.** Unit tests passed, and this checkout read 9 persisted sample events from the local database |
+| Status answers from the record, with timestamp, fresh / stale / unknown | **Built and observed** over loopback with the model off |
+| Typed questions | **Built and observed** via `POST /api/question` |
+| Browser push-to-talk (feature-detected, review before submit) and read-aloud via `speechSynthesis` | **Built in the page.** Microphone and audible playback were **not** verified. Typing remains the path that was checked |
+| Optional Belweave/Kai-4 call that may only accept the single supplied evidence item; visible wording stays the deterministic record | **Built.** Automated tests use mocks. **No live model call was made here** (no key on this machine). A missing or failed model shows a stored-event fallback |
+| Notify gate: one-use, action-bound, ten-minute, fail-closed | **Built.** Tests cover the contract with stand-ins. **This checkout's live gate failed closed** because the Notify CLI was not installed. No phone round trip |
+| Notify alerts for completion, failure, and decision events | **Built**, off by default, not sent here |
+| Generic authenticated event adapter (`POST /api/events`, `npm run report-event`) | **Built.** Not a native Codex or Grok Bot connector |
+| Optional limited Cursor `stop` hook | **Built and unit-tested** against a fixture. Not run inside a live Cursor session |
+| Clearly labeled **SIMULATED** samples and simulated Approve / Deny / Timeout | **Built and observed.** They do not write the demo file |
+| "Hey Google" / Google Assistant | **Not built.** Product vision only |
+| Native Grok Bot, Codex, or broad Cursor telemetry | **Not built** |
+| Resuming or controlling a coding agent after approval | **Not built.** The gate does not resume an agent |
+| Online deployment | **None.** This repository is source. GitHub Pages cannot run it |
+
+## How it works
+
+```mermaid
+flowchart LR
+  subgraph Vision["Product vision, not built"]
+    GA["Voice assistant"]
+  end
+  subgraph Built["Built: local SpeakSeek on 127.0.0.1"]
+    API["Event API"]
+    DB[("SQLite")]
+    ANS["Deterministic answer"]
+    UI["Dashboard"]
+    GATE["One timestamp gate"]
+  end
+  AG["Script or optional Cursor stop hook"] --> API --> DB
+  UI --> ANS --> DB
+  GA -.-> ANS
+  GATE <--> N["Notify CLI, optional"]
+  GATE --> F["One timestamp file, only after a matching phone yes"]
+```
+
+**The event record.** A script or the optional Cursor hook posts a small JSON event: agent, session, event id, type, UTC timestamp, sequence, and a short summary. Types: `started`, `progress`, `decision`, `completed`, `failed`, `aborted`. The bearer token is required. Bodies are capped at 8 KiB. Extra fields are rejected. SQLite uses WAL, full synchronous writes, and unique constraints. Another agent cannot reuse a session id. A replay of the same event id and payload is idempotent; a changed payload under the same id is a conflict. The highest sequence wins, even if an older event arrives later. The latest 100 events are shown; all are kept.
+
+**Answers.** The words you see are built from the selected session's last state, UTC time, summary, and freshness. They work with the model off, which is how this checkout answered. If Belweave is configured, the request is `/chat/completions` with `max_tokens: 512` and a 20-second timeout. The model is given the redacted question (at most 200 characters) and one redacted copy of that deterministic record. It must return JSON selecting that single evidence item. Any other shape, tool call, empty, truncated, or HTTP error falls back visibly. Free-form model prose is not displayed. The model does not write a new status and cannot approve an action.
+
+**Voice.** The page looks for the browser's speech recognition. If it is missing or permission is denied, the question box still works. Captured speech is text you can edit before Ask. Read aloud uses `speechSynthesis`, with Stop / mute. Asking does not approve.
+
+**The approval gate.** Each real decision binds a random 256-bit id (also the Notify idempotency key), the session, one constant action, the SHA-256 of the fixed parameters, and a ten-minute expiry. The server asks Notify with `notify send ask … --approval --idempotency-key … --expires-in 10m`, stores the returned interaction id, and waits. Only a successful result for that same interaction, kind `approval`, status `approved`, response `approve`, inside the window, can be consumed. Consumption is one conditional SQLite update before any file write. Four worker threads racing one decision are covered by the tests.
+
+Denial, timeout, expiry, cancellation, malformed output, missing login, service errors, and mismatched or late replies do not write the file. Pending is not approval. On startup, decisions still `pending` or `approved` fail closed. A crash after consumption does not run the action again.
+
+**What the gate does today:** it creates one file, `demo-output/<decision-id>.txt`, containing an ISO timestamp. It uses filesystem calls, not a shell. There is no arbitrary-action API and no inbound approval URL. A model reply, a browser simulation, an event, or free-form phone text cannot approve it. It does not resume a coding agent.
+
+## Run it locally
+
+Node **24.22.1 or newer** (built-in SQLite). No runtime npm packages.
 
 ```bash
 npm run build
 npm start
 ```
 
-The server binds exclusively to `127.0.0.1`, preferring **http://127.0.0.1:5177**. If occupied it tries 5178–5190 without stopping any existing process. Use the exact URL printed at startup. Listening on loopback is required. Publishing this Git repository does not start a server.
+Open the printed URL, normally **http://127.0.0.1:5177**. If that port is busy it tries 5178–5190 without killing whatever is already there. It listens on loopback only. Data and a generated ingest token stay in the ignored `.local/` directory.
 
-Stop a foreground instance with **Ctrl+C**. Restart with `npm start`; SQLite data and the ingest token remain in `.local/`. To run in the background in a normal shell:
+`npm install` is only for development tools (`npm run typecheck`, browser smoke). `npm test` builds and runs the tests.
 
-```bash
-mkdir -p .local
-npm start > .local/server.log 2>&1 &
-agentpulse_pid=$!
-# Stop only the instance just started in this shell:
-kill "$agentpulse_pid"
-```
+**Server-side environment only.** The browser does not receive these.
 
-For source development and full type checking, install development dependencies when npm is reachable:
+| Variable | Purpose |
+|---|---|
+| `BELWEAVE_API_KEY` | Optional. Absent means deterministic answers only |
+| `BELWEAVE_BASE_URL` / `BELWEAVE_MODEL` | Defaults: `https://api.infer.belweave.ai/v1`, `Belweave/Kai-4` |
+| `AGENTPULSE_INGEST_TOKEN` | Event API token, at least 32 characters. Generated in `.local/ingest-token` mode `0600` if unset |
+| `AGENTPULSE_PORT` | Preferred port, default 5177 |
+| `NOTIFY_BIN` | Notify CLI path. Default is `notify` on `PATH` |
+| `AGENTPULSE_NOTIFICATIONS` | `true` opts in to live completion, failure, and decision alerts. Default off |
 
-```bash
-npm install --cache .local/npm-cache
-npm run typecheck
-npm run dev
-```
+**Phone setup is a step you do yourself, after the local app is running:**
 
-`dev` rebuilds and restarts on changes to `src/` or `web/`. `build` uses Node's bundled TypeScript transform and does **not** replace static type checking. The transform can emit an experimental-feature warning on Node 24.
+1. Install the Notify app from the [Notify quickstart](https://notify.belweave.ai/docs/quickstart) and allow notifications. The iOS beta noted in that project's docs needs iOS 16 or newer.
+2. Sign in on the phone with the same account you will use for the CLI.
+3. In your own terminal: `notify auth login --client-name AgentPulse --no-open --json`, then `notify auth status`. Do not paste credentials into chat.
 
-| Command | Purpose |
-| --- | --- |
-| `npm start` | Run the existing production build |
-| `npm run dev` | Watch, rebuild, and restart locally |
-| `npm run build` | Produce `dist/src`, `dist/web`, and compiled tests |
-| `npm run typecheck` | TypeScript strict checking; requires development dependencies |
-| `npm test` | Build and run unit, worker concurrency, and transport tests |
-| `npm run test:http` | Run the real loopback/restart smoke test separately |
-| `npm run seed` | Seed sample sessions once; preserve existing samples |
-| `npm run report-event` | Read one event JSON object from stdin |
-| `npm run smoke:browser` | Playwright smoke and screenshots; requires Chrome and playwright-core |
-| `npm run smoke:model` | One live Belweave request; no phone notification |
-| `npm run package` | Create allowlisted source and production archives |
+Publishing this Git repository does not start a server and does not create a public URL.
 
-## Environment
+## 90-second demo
 
-Set values securely in the inherited shell or an ignored `.env` file. `.env.example` contains placeholders only. Never paste keys into chat, use them as command arguments, or add them to source control.
+The controls below are the ones on the page. There is no "make stale" button and no "replay this decision" button. Samples are seeded once. Checkout recovery is fresh at seed time because its last event is "now." Search accessibility is seeded about four minutes earlier, so it is already stale. Empty stays unknown. Details and the optional real-phone script are in [DEMO.md](DEMO.md).
 
-| Variable | Default / behavior |
-| --- | --- |
-| `BELWEAVE_API_KEY` | Missing means unconfigured; deterministic answers still work |
-| `BELWEAVE_BASE_URL` | `https://api.infer.belweave.ai/v1` |
-| `BELWEAVE_MODEL` | `Belweave/Kai-4` |
-| `AGENTPULSE_INGEST_TOKEN` | Optional secret of at least 32 characters; otherwise securely generated in `.local/ingest-token`, mode 0600 |
-| `AGENTPULSE_PORT` | `5177`, with bounded fallback to a free port |
-| `NOTIFY_BIN` | `notify` on PATH; accepts a fixed executable path |
-| `AGENTPULSE_NOTIFICATIONS` | `false`; explicit opt-in for live terminal/decision event alerts |
-| `AGENTPULSE_URL` | Adapter/browser tooling only; default `http://127.0.0.1:5177` |
-| `CHROME_BIN` | Browser smoke only; default `/usr/bin/google-chrome` |
+1. **Checkout recovery · SAMPLE.** The SIMULATED SAMPLE badge is on. The timeline is four recorded steps, ending in a review decision. That is sample evidence, not a live agent.
+2. **Ask.** Leave Belweave off (it is forced off when no key is configured). Type "How is this task doing?" and press **Ask SpeakSeek**. The label is **STORED-EVENT FALLBACK**. The sentence names the last state and time. It does not say the task is done.
+3. **Freshness without a special control.** Select **Search accessibility · SAMPLE**. The state is completed and the freshness is stale, so current progress is unknown. Select **No events yet (sample)**. The state is unknown. Select **API contract check · SAMPLE** if you want a stale failure. Events from one session do not appear in another.
+4. **SIMULATED decision.** Press **Try SIMULATED decision**, then **Approve**. The card reads **SIMULATED · APPROVED**. No phone push and no timestamp file.
+5. **Deny and Timeout.** Start another simulation and press **Deny** (**SIMULATED · DENIED**). Start another and press **Timeout** (**SIMULATED · EXPIRED**). Timeout is immediate on purpose. It does not pretend ten minutes passed. None of these write `demo-output/`.
+6. **Real gate, fail closed unless you have Notify.** Select **Local phone-gate demo**. The real button is enabled only off samples. This checkout clicked the equivalent request with no Notify CLI installed: the decision became **FAILED**, reason "Notify CLI not installed," executed `0`, and no file appeared. Press **Request real phone approval** yourself only when you intend a real phone test. A matching, timely approval can create one timestamp file, once. This publication did not do that round trip.
 
-The dashboard never receives the ingest token or Belweave key. Notify manages its own credentials; the app does not read or display its credential file.
+## Security and honest limits
 
-## Events
+- **Loopback only.** The server checks Host and Origin, blocks cross-site browser requests, and requires an HttpOnly SameSite cookie plus a CSRF header for browser mutations. Event intake uses a separate bearer token. Do not turn these off or open a tunnel to get a public demo.
+- **What was checked about secrets.** The dashboard is not given the ingest token or the model key. This checkout's homepage did not contain the token. The token file was mode `0600`. The process log showed the listen URL and that `.env` was absent. It did not print the token. That is not a promise that a secret can never land in a log, a crash dump, or SQLite if an event producer puts one in a summary.
+- **What redaction actually covers.** On ingest, the summary passes through a heuristic redactor (token-like strings, long high-entropy blobs, URLs, paths, command-like text) and is stored that way. The optional model request sends the redacted question and one redacted deterministic record, not the raw event list. Notify's approval text is a fixed sentence: create one demo timestamp file, plus a session fingerprint, the action id, the parameter hash, the request id, and the expiry. It is not your question and not the event summary. Opt-in alerts send a fixed category line ("completed," "failed," or "decision needed"), then the same redactor runs on that line. Speech text stays in the browser until you submit a question. Redaction is heuristic. Report short outcomes, not secrets.
+- **Questions and simulations do not pass the gate.** Sample sessions reject a real decision. Simulated Approve, Deny, and Timeout never create the file. Typed or spoken text cannot authorize it.
+- **The Cursor `stop` hook is limited.** It records that an agent loop ended. It does not prove the task is done, and it was not invoked by Cursor here.
+- **No hosting.** GitHub holds this source. GitHub Pages cannot run Node and SQLite. A real hosted deployment would need an authenticated backend and persistent storage you operate, plus your own Notify and model credentials. None of that is provided, and no live URL is claimed.
 
-`POST /api/events` requires `Authorization: Bearer <AGENTPULSE_INGEST_TOKEN>` and JSON content type. Maximum request size is **8 KiB**. All eight fields below are required; extra fields are rejected. IDs contain 1–96 ASCII letters, numbers, underscores, or hyphens. Summary length is 1–500 characters before sanitization.
+## Verification on this checkout
 
-```json
-{
-  "agentId": "my-agent",
-  "sessionId": "checkout-task-1",
-  "eventId": "checkpoint-1",
-  "type": "progress",
-  "timestamp": "2026-11-07T12:00:00.000Z",
-  "sequence": 1,
-  "summary": "Recorded passing checks for the retry change"
-}
-```
+About **1:57 PM CST on Nov 7, 2026**, on Node **v24.22.1**. This replaces the earlier Codex sandbox snapshot (48 passed, 2 skipped, typecheck and server blocked). Those older notes remain in [VERIFICATION.md](VERIFICATION.md) and are labeled as the Codex record.
 
-Allowed types: `started`, `progress`, `decision`, `completed`, `failed`, `aborted`. Report an event from the app directory without printing the token:
+| Check | Result |
+|---|---|
+| Production build | **Passed** (Node's TypeScript transform; it prints an experimental-feature warning) |
+| `npm run typecheck` | **Passed**, after a type-only fix so Notify exit code `3` still type-checks as credentials |
+| `npm test` | **50 passed, 0 failed, 0 skipped.** Includes loopback HTTP with restart, and a real child process |
+| `GET /api/health` and `GET /` on `127.0.0.1:5177` | **200.** SQLite, Belweave unconfigured, Notify CLI not installed |
+| Selected sessions, model-off question, simulated approve/deny/timeout, sample real-gate 409, local-demo real gate failed closed, no output file | **Observed** over HTTP |
+| SQLite rows after the run | **9 events** in WAL. Startup recovery fail-closes leftover `pending` and `approved` decisions |
+| Browser click-through, screenshots, microphone, read-aloud audio | **Not completed** |
+| Live Belweave request | **Not attempted** here. Mock tests passed. Do not read that as a live model pass |
+| Notify inside this app | **Not a phone round trip.** CLI was absent, so the gate failed closed. A parent-machine CLI push accepted at 1:42 PM CST is a separate CLI check, not this app |
 
-```bash
-node --input-type=module -e 'console.log(JSON.stringify({agentId:"manual",sessionId:"my-task",eventId:"first-observation",type:"started",timestamp:new Date().toISOString(),sequence:1,summary:"Started the task"}))' | npm run report-event
-```
+## What's next
 
-The adapter reads the token from its environment or the ignored local token file. It accepts only a local `http://127.0.0.1` target; set `AGENTPULSE_URL` if the server selected another port. For adapters in another project, provide the ingest token securely through that process's environment.
+1. A browser walkthrough of the same demo, then one deliberate Notify approval that creates the single timestamp file and a denial that does not. Not done yet.
+2. A voice-assistant front door so a spoken "how's Agent X?" can reach this status answer. Approvals stay on the phone. Not built.
+3. Native adapters that post `started`, `progress`, `decision`, and `completed` from a coding agent. The generic ingest adapter is not that connector.
+4. If the gate grows, a small allowlist of reviewable actions, each with its own parameter hash and its own approval. Still not arbitrary commands, and still not "resume the agent."
+5. Optional hosting only with real authentication and storage you control. Not available now.
 
-Session IDs are globally namespaced: another agent cannot reuse an existing session. Within each session, `(eventId, payload)` replays are idempotent; changed content under the same event ID returns 409. A sequence can identify only one event. The highest sequence determines the observed state, regardless of arrival order or client time. Lower-sequence arrivals enter the timeline without rolling state backward or sending obsolete alerts. Samples reject live telemetry. The latest 100 events are shown; all are retained in SQLite.
+---
 
-**Time rules:** timestamps must be valid UTC ISO times. More than 120 seconds in the future is rejected. Smaller positive clock skew is disclosed; freshness uses the earlier of event time and server receipt time. At most 120 seconds old is fresh; older is stale. An empty session is unknown. Old events can be stored but do not become fresh through replay or late arrival. No heartbeat or silence is interpreted as progress. A completion event means completion was recorded, not independently proven.
-
-SQLite uses WAL, FULL synchronous writes, unique constraints, and a busy timeout. `.local/` persists across restarts. Back up SQLite through a proper SQLite backup or while the app is stopped, including any uncheckpointed WAL. Do not delete local data to refresh a demo.
-
-## Questions and speech
-
-The authoritative answer includes the selected session's last observed state, UTC timestamp, summary, missing-data disclosure, and freshness warning. It remains available with the model disabled or unavailable.
-
-The optional Belweave request uses `/chat/completions`, `max_tokens: 512`, and a 20-second timeout. Empty, truncated, invalid, ungrounded, tool-bearing, HTTP-error, and timed-out responses fall back visibly. For this MVP the model **selects supplied sanitized evidence** through a constrained JSON response; visible wording comes from the deterministic record. Free-form model prose is not displayed. This prevents event or question instructions from inventing progress or authorizing an action. It also limits open-ended question answering: SpeakSeek reports recorded status, rather than inspecting code or predicting activity.
-
-Token-like text, paths, URLs, and command-like text are redacted before external context; only short evidence and the sanitized question are sent. Redaction is heuristic, so event producers should report short task outcomes rather than sensitive contents. Model configuration is server-side. Automated model tests use mocks.
-
-Browser recognition is feature-detected and push-to-talk. Captured speech is reviewable before submission. Permission denial and unsupported browsers retain typed input. Recognition may use the browser vendor's service; no paid speech API is required by SpeakSeek. Read aloud uses `speechSynthesis`, with Stop / mute. Microphone capture and audible playback were not verified in the original Codex run, and this repository does not claim them unless [VERIFICATION.md](VERIFICATION.md) records a later check.
-
-## Notify setup and live phone testing
-
-In the original Codex workspace, the supplied [Notify quickstart](https://notify.belweave.tech/docs/quickstart) was unreachable. That workspace consulted the official [quickstart](https://notify.belweave.ai/docs/quickstart), [decision guide](https://notify.belweave.ai/docs/ask-decision), [OpenAPI](https://notify.belweave.ai/openapi.json), installed CLI help, and an installed 0.14.2 command source. That CLI did not support `--version`; the local release bundle identified its version. Those notes are historical. This repository does not repeat that login or phone test.
-
-Notify is an optional external CLI. This repository does not ship a Notify login, a phone credential, or a Belweave key. A Notify CLI check or test push performed outside this app is not an end-to-end approval test. Installing or publishing this source does not log in, send a push, install a permission hook, or contact a phone.
-
-After completing local checks, the user-only step is:
-
-```bash
-notify auth login --client-name AgentPulse --no-open --json
-notify auth status
-```
-
-Install the Notify phone app through the beta link in the official quickstart, sign in with the same account used for CLI authorization, and allow notifications. The iOS beta requires iOS 16 or newer.
-
-Use **Recheck** in Connections after sign-in. Real event alerts default off and require the dashboard toggle or explicit environment opt-in. Only completion, failure, and decision events qualify. Samples never send. Event alert reservations and deduplication keys persist; admission is limited to three per rolling minute. Suppressed or failed attempts are not retried automatically. Push text contains a fixed event-category summary, with hashed idempotency keys; no raw event text, commands, paths, or credentials. The latest alert result is shown in Connections. Accepted/queued is never described as seen or approved.
-
-Select **Local phone-gate demo**, then deliberately click **Request real phone approval**. That is an explicit real phone test, separate from alert opt-in. Never run it as an unsolicited automated smoke test.
-
-## Fixed approval gate
-
-The only gated action creates `demo-output/<decision-nonce>.txt` containing an ISO timestamp. It uses filesystem APIs, never shell commands. There is no arbitrary-action API or inbound approval callback. A model, browser, simulation, event, or free-form phone text cannot approve it.
-
-Each durable decision binds a random 256-bit nonce/idempotency key, session, constant action ID, SHA-256 of canonical fixed parameters, creation time, and a local expiry of ten minutes. Phone text includes the session fingerprint, action, parameter hash, nonce, and expiry. Creation uses `notify send ask ... --approval --idempotency-key ... --expires-in 10m`; the returned `interaction.id` is persisted before `notify interaction wait ... --timeout <remaining>s`.
-
-Only a successful CLI result for the exact bound interaction, kind `approval`, status `approved`, response `approve`, and timely `respondedAt` can reach consumption. No accepted/queued devices, malformed output, service errors, missing login, timeout, denial, cancellation, mismatched binding, expiry, or late reply blocks execution. Pending is never approval.
-
-Consumption is a single durable conditional SQLite update before filesystem I/O. The output uses exclusive file creation, rejects a symlink output directory, and is never retried after consumption. Four simultaneous worker threads are tested against the same decision. A crash after consumption can leave execution uncertain; it stays consumed and never runs again. On startup, pending/approved requests fail closed. A new request needs a new phone decision. Local cancel prevents local execution but may leave the phone prompt visible until expiry.
-
-Simulations are prominently **SIMULATED**, persist separately, and never execute the real action. Sample sessions permit simulation only. States include pending, approved (simulation), denied, expired, failed, and consumed; consumed plus `executed` distinguishes confirmed file creation from an uncertain outcome. Real phone requests are limited to three per minute and one pending request per session.
-
-## Optional Cursor hook
-
-The [current Cursor hook reference](https://cursor.com/docs/agent/hooks) documents common `conversation_id`, `generation_id`, `hook_event_name`, etc., and `stop` fields `status: completed|aborted|error` plus `loop_count`. The fixture in `tests/fixtures/cursor-stop.json` follows those fields. The adapter uses only these documented values, excludes workspace paths/transcripts, and emits `{}` without changing permissions.
-
-For this project, inspect `scripts/cursor-hooks.example.json`, then copy its contents into `.cursor/hooks.json` in a trusted Cursor workspace. It runs `node scripts/cursor-stop.mjs` from the project root. If used elsewhere, copy the two standalone adapter scripts, adjust the documented project-relative command, and securely provide the ingest token and URL to Cursor's environment. No hook was installed automatically here.
-
-Cursor's `stop` event proves an agent loop outcome, not task completion. Generations are separate hashed sessions because no lifetime sequence is documented. Within a generation, `loop_count` orders events. A tiny local SQLite cache stabilizes timestamps for replays. Failed sends are not automatically retried; a repeated hook invocation reuses the cached event. This is limited stop telemetry, not a full Cursor progress feed. Actual Cursor invocation is **unverified**. No before-shell hook, Codex integration, T3 integration, tunnel, or MCP dependency is used.
-
-## Deployment
-
-This GitHub repository publishes source. It is not a running server, and there is no live deployment URL.
-
-The supported demo is local. Install Node **24.22.1 or newer**, run `npm run build`, then `npm start`, and open the printed `http://127.0.0.1` URL. Deterministic answers need no API key. `npm install` is only for development dependencies used by `npm run typecheck` and `npm run smoke:browser`.
-
-GitHub Pages cannot host this app. The server is a Node process with built-in SQLite, and it rejects foreign Host and Origin headers. Do not disable those checks, bind a public address, or open a tunnel in order to expose it.
-
-A full hosted deployment is not provided. It would require an authenticated backend and persistent storage that you operate, plus your own Notify and model credentials for those optional paths. Until that exists, the honest demo is the local loopback server.
-
-## Security and artifacts
-
-The server rejects foreign Host/Origin headers and cross-site browser requests. Browser mutations need an HttpOnly SameSite cookie plus CSRF header. Event intake uses its separate bearer credential. Browser text is rendered with `textContent`; a restrictive CSP prevents inline scripts. Request bodies are bounded and schemas checked. This is a single-user loopback app, not a remotely authenticated service; do not expose it through a public tunnel.
-
-`npm run package` uses explicit file allowlists. Archives exclude `.env`, generated tokens, databases, logs, dependencies, Git metadata, generated action output, unrelated workspace files, and their own output. `artifacts/SHA256SUMS` records hashes.
-
-- `artifacts/agentpulse-source.tar.gz`: source, tests, standalone adapters, and documentation. Build/run requires Node 24.22.1+; type checking requires `npm install`.
-- `artifacts/agentpulse-production.tar.gz`: compiled server/UI, standalone adapters, minimal package metadata, and docs. Extract, enter `agentpulse/`, run `npm start`. No npm installation is needed for runtime. Notify CLI and user authentication are optional external requirements for real phone functions.
-- `artifacts/browser-smoke.json` and `artifacts/model-smoke.json`: actual attempted verification results. No screenshot was produced because browser launch was blocked.
-
-See [DEMO.md](DEMO.md) for a repeatable 90-second walkthrough and [VERIFICATION.md](VERIFICATION.md) for observed results and exact limitations.
+*SpeakSeek: an honest recorded answer when you ask. The one timestamp file is written only after a matching, timely phone yes.*
