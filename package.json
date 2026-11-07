@@ -1,0 +1,27 @@
+{
+  "name": "agentpulse",
+  "version": "1.0.0",
+  "private": true,
+  "type": "module",
+  "engines": {
+    "node": ">=24.22.1"
+  },
+  "scripts": {
+    "dev": "node --env-file-if-exists=.env scripts/dev.mjs",
+    "start": "node --env-file-if-exists=.env dist/src/main.js",
+    "build": "node scripts/build.mjs",
+    "typecheck": "tsc --noEmit",
+    "test": "npm run build && node --test --test-isolation=none dist/tests/*.test.js",
+    "seed": "node --env-file-if-exists=.env dist/src/seed.js",
+    "report-event": "node --env-file-if-exists=.env scripts/report-event.mjs",
+    "smoke:browser": "node scripts/browser-smoke.mjs",
+    "package": "node scripts/package.mjs",
+    "test:http": "node --test --test-isolation=none dist/tests/network.test.js",
+    "smoke:model": "node --env-file-if-exists=.env scripts/model-smoke.mjs"
+  },
+  "devDependencies": {
+    "@types/node": "^24.0.0",
+    "typescript": "^5.9.0",
+    "playwright-core": "^1.56.0"
+  }
+}
