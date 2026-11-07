@@ -97,11 +97,13 @@ On the Mac where SpeakSeek is already running, create this yourself in Shortcuts
 
 Use the printed port if it is not 5177: add `--base http://127.0.0.1:THAT_PORT`. Shell `/bin/zsh`, pass input off. Then wear AirPods connected to **that Mac**, activate Siri with Apple's phrase or the AirPods control, and say **SpeakSeek status**. The shortcut name is what you say after Siri is awake. Replace the label with the session you call Agent X.
 
-This works only because the shortcut and the server are on the same computer. It was not created or run on a Mac in this checkout. There is no signed app and no Apple developer account in this work.
+This path is designed for the same Mac, where the shortcut and the loopback server are on one computer. It was not created or run on a Mac here, so that is the setup, not a test of AirPods or Siri. A shortcut you make in the Shortcuts app does not need an Apple Developer account, Xcode, or a signed app. Apple’s guide is [create a custom shortcut](https://support.apple.com/guide/shortcuts/create-a-custom-shortcut-apd84c576f8c/ios), then [ask Siri to run it by name](https://support.apple.com/guide/shortcuts/run-shortcuts-with-siri-apd07c25bb38/ios), including on a Mac.
 
-**3. "Hey Agent X", an iPhone, or Google Home.** Not available, and not claimed.
+**3. "Hey Agent X", an iPhone, or Google Home.** Not in this build. A later path is still the point of the product.
 
-AirPods do not grow a custom wake word because a website asked. SpeakSeek does not listen for "Hey Agent X". iOS has an accessibility setting, [Vocal Shortcuts](https://support.apple.com/guide/iphone/use-vocal-shortcuts-iph7f242ea2c/ios), where a person can teach a phrase that runs an action or a Siri request. That setting is not part of this app, and an iPhone still cannot call `127.0.0.1` on your Mac. A phone, HomePod, or Google speaker needs a server it can reach with real authentication. This app binds to loopback only. No tunnel and no public bind were added. Building that later needs a hosted authenticated backend, and a native Siri path needs an Apple developer account, a signed app or a shortcut on the phone, and a device to try it on. None of that was done here.
+SpeakSeek does not listen for "Hey Agent X", and AirPods do not gain that wake phrase from this page. The voice start Apple documents is "Hey Siri" or "Siri", or the AirPods control, then the name of a shortcut. iOS also has [Vocal Shortcuts](https://support.apple.com/guide/iphone/use-vocal-shortcuts-iph7f242ea2c/ios), an accessibility setting where a person teaches a phrase that runs an action or a Siri request. That setting is not part of SpeakSeek.
+
+An iPhone, HomePod, or Google speaker cannot call this build, because the server listens only on `127.0.0.1`. The feasible next step for another device is a server that device can reach, with real authentication, plus a shortcut or app on the device. A shortcut the person creates still does not need a developer account or code signing. A native app that exposes [App Intents](https://developer.apple.com/documentation/appintents) is a different project: it needs Apple’s toolchain, a build, signing, and a device to try. [Membership is not required to start in Xcode and test on your own device](https://developer.apple.com/help/account/membership/programs-overview/). A [Personal Team](https://developer.apple.com/help/account/basics/about-your-developer-account/) from an Apple Account can sign that personal install, with Apple’s limits. Paid Developer Program membership is for wider distribution and some capabilities, not for the Shortcuts setup above. None of the phone or native-app work was done here. No tunnel was opened.
 
 ## What's actually built
 
@@ -120,8 +122,8 @@ SpeakSeek runs locally as a Node web app on `127.0.0.1`, with a dashboard, an ev
 | Optional limited Cursor `stop` hook | **Built and unit-tested** against a fixture. Not run inside a live Cursor session |
 | Clearly labeled **SIMULATED** samples and simulated Approve / Deny / Timeout | **Built and observed.** They do not write the demo file |
 | Read-only `scripts/status-line.mjs` for one recorded sentence, loopback only | **Built and tested** here. `--speak` is macOS `/usr/bin/say` and was **not** run on a Mac |
-| Same-Mac Shortcut: Siri's own "Hey Siri" / "Siri", then the shortcut name | **You install it** from the steps above. Not installed or run in this checkout |
-| "Hey Agent X" wake phrase, iPhone Siri, or Google Home reaching this server | **Not available.** The server is loopback-only. No custom AirPods wake word |
+| Same-Mac Shortcut: Siri's own "Hey Siri" / "Siri", then the shortcut name | **Designed for the same Mac.** You create it in Shortcuts. No developer account. Not installed or run on a Mac here |
+| "Hey Agent X", or an iPhone / Google Home call into this server | **Not in this build.** No custom wake word. Loopback only today. A later reachable server can still use a user Shortcut without a developer account |
 | "Hey Google" / Google Assistant | **Not built.** Product vision only |
 | Native Grok Bot, Codex, or broad Cursor telemetry | **Not built** |
 | Resuming or controlling a coding agent after approval | **Not built.** The gate does not resume an agent |
@@ -221,7 +223,7 @@ About **1:57 PM CST on Nov 7, 2026**, on Node **v24.22.1**. This replaces the ea
 | Production build | **Passed** (Node's TypeScript transform; it prints an experimental-feature warning) |
 | `npm run typecheck` | **Passed**, after a type-only fix so Notify exit code `3` still type-checks as credentials |
 | `npm test` at about 1:57 PM CST | **50 passed, 0 failed, 0 skipped** before the AirPods follow-up |
-| `npm test` after `scripts/status-line.mjs` | **52 passed, 0 failed, 0 skipped** on Node v24.22.1. Two new tests check that the command refuses non-loopback targets and prints one recorded sentence without creating a decision. `--speak` on this Linux machine said it did not speak. No AirPods and no Mac `say` run |
+| `npm test` after `scripts/status-line.mjs` | **52 passed, 0 failed, 0 skipped** on Node v24.22.1, on the prior commit. Two new tests check that the command refuses non-loopback targets and prints one recorded sentence without creating a decision. `--speak` on this Linux machine said it did not speak. No AirPods and no Mac `say` run. The wording fix after that commit is documentation only and was not a new test run |
 | `GET /api/health` and `GET /` on `127.0.0.1:5177` | **200.** SQLite, Belweave unconfigured, Notify CLI not installed |
 | Selected sessions, model-off question, simulated approve/deny/timeout, sample real-gate 409, local-demo real gate failed closed, no output file | **Observed** over HTTP |
 | SQLite rows after the run | **9 events** in WAL. Startup recovery fail-closes leftover `pending` and `approved` decisions |
@@ -232,7 +234,7 @@ About **1:57 PM CST on Nov 7, 2026**, on Node **v24.22.1**. This replaces the ea
 ## What's next
 
 1. A browser walkthrough of the same demo, then one deliberate Notify approval that creates the single timestamp file and a denial that does not. Not done yet.
-2. Try the same-Mac shortcut on real AirPods. The script is in the repo. The shortcut, Siri, and the headphones were not run here. An iPhone or Google speaker still needs a reachable authenticated backend. Not built. Approvals stay on the phone.
+2. Try the same-Mac shortcut on real AirPods. The script is in the repo. The shortcut, Siri, and the headphones were not run here. Creating that shortcut does not need an Apple Developer account. An iPhone or Google speaker still needs a reachable authenticated server before it can ask. Approvals stay on the phone.
 3. Native adapters that post `started`, `progress`, `decision`, and `completed` from a coding agent. The generic ingest adapter is not that connector.
 4. If the gate grows, a small allowlist of reviewable actions, each with its own parameter hash and its own approval. Still not arbitrary commands, and still not "resume the agent."
 5. Optional hosting only with real authentication and storage you control. Not available now.
