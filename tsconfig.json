@@ -1,0 +1,1 @@
+{"compilerOptions":{"target":"ES2023","module":"NodeNext","moduleResolution":"NodeNext","lib":["ES2023","DOM","DOM.Iterable"],"strict":true,"noUncheckedIndexedAccess":true,"outDir":"dist","rootDir":".","skipLibCheck":true,"sourceMap":true},"include":["src/**/*.ts","web/**/*.ts","tests/**/*.ts"]}
