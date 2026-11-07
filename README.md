@@ -38,6 +38,8 @@ Three things in that dialogue are the product:
 2. **The approval is narrow.** It covers one action, for one session, once, before it expires. A second step needs a second approval. A voice or typed answer never authorizes execution.
 3. **"Done" requires evidence.** SpeakSeek only says a task is complete after a completion event has been recorded. That means completion was recorded, not that SpeakSeek re-ran the work.
 
+The kitchen scene with Google is still a vision. The section **Asking through your AirPods** is the part you can actually set up on the same Mac.
+
 ## The problem
 
 Coding agents now run long enough that you start walking away from them. Then you face two bad options:
@@ -63,6 +65,44 @@ Status alone could be a dashboard. Approval is what requires a phone. Notify is 
 
 A Notify CLI check or a test push that succeeded outside this app is not an end-to-end SpeakSeek approval. This repository does not log in, send a push, or contact a phone by being published.
 
+## Asking through your AirPods
+
+Wear the headphones while you cook or walk, ask how Agent X is doing, and hear the last recorded status. A separate Notify prompt on the phone is still the only yes for the one timestamp file. A second action needs a second approval. "Done" is still only a stored completion. Saying the status out loud does not approve anything.
+
+Three different layers get confused. Only the first one is in this repository, and it was not tried on real AirPods.
+
+**1. AirPods as the microphone and speaker the computer already selected.** Implemented. Hardware not tested here.
+
+The page does not choose AirPods and it does not listen for a name. The mic button and **Read aloud** use the [Web Speech API](https://developer.mozilla.org/en-US/docs/Web/API/Web_Speech_API/Using_the_Web_Speech_API): recognition reads the device microphone, and `speechSynthesis` plays through the device's audio output. If macOS has selected your AirPods, that is the headset those buttons use. You press the mic button, read the text, then press **Ask SpeakSeek**. If the browser has no recognition, you type. This checkout did not plug in AirPods, so treat the headset itself as untested.
+
+The same recorded sentence is available without the page:
+
+```bash
+npm run build
+npm start
+node scripts/status-line.mjs --label "Checkout recovery"
+```
+
+That command only requests `http://127.0.0.1` and the port SpeakSeek printed. It refuses any other host. It does not read the ingest token, post an event, or touch the approval gate. On a Mac, add `--speak` and it runs `/usr/bin/say` with that one sentence, through whatever output the Mac is using. This environment is Linux, so `--speak` printed the sentence and reported that it did not speak. No AirPods were attached.
+
+**2. "Hey Siri", then a shortcut you add on that same Mac.** The script is included. The shortcut is not installed, and Apple did not certify this project.
+
+Apple's own wake phrase is **"Hey Siri"** or **"Siri"**, depending on the setting and the AirPods model. Connected AirPods can also start Siri with a double-tap or a press-and-hold, as [Use Siri with AirPods](https://support.apple.com/guide/airpods/use-siri-devc2c0f438a/web) describes. [Use Siri on all your Apple devices](https://support.apple.com/en-us/105020) is the setup article. After Siri is listening, [you say the name of a shortcut you created](https://support.apple.com/guide/shortcuts/run-shortcuts-with-siri-apd07c25bb38/ios). Siri runs it. That is not a wake phrase SpeakSeek registered.
+
+On the Mac where SpeakSeek is already running, create this yourself in Shortcuts. Name it `SpeakSeek status`. Add one **Run Shell Script** action:
+
+```bash
+/usr/bin/env node /ABSOLUTE/PATH/TO/speakSeek/scripts/status-line.mjs --label "Checkout recovery" --speak
+```
+
+Use the printed port if it is not 5177: add `--base http://127.0.0.1:THAT_PORT`. Shell `/bin/zsh`, pass input off. Then wear AirPods connected to **that Mac**, activate Siri with Apple's phrase or the AirPods control, and say **SpeakSeek status**. The shortcut name is what you say after Siri is awake. Replace the label with the session you call Agent X.
+
+This works only because the shortcut and the server are on the same computer. It was not created or run on a Mac in this checkout. There is no signed app and no Apple developer account in this work.
+
+**3. "Hey Agent X", an iPhone, or Google Home.** Not available, and not claimed.
+
+AirPods do not grow a custom wake word because a website asked. SpeakSeek does not listen for "Hey Agent X". iOS has an accessibility setting, [Vocal Shortcuts](https://support.apple.com/guide/iphone/use-vocal-shortcuts-iph7f242ea2c/ios), where a person can teach a phrase that runs an action or a Siri request. That setting is not part of this app, and an iPhone still cannot call `127.0.0.1` on your Mac. A phone, HomePod, or Google speaker needs a server it can reach with real authentication. This app binds to loopback only. No tunnel and no public bind were added. Building that later needs a hosted authenticated backend, and a native Siri path needs an Apple developer account, a signed app or a shortcut on the phone, and a device to try it on. None of that was done here.
+
 ## What's actually built
 
 SpeakSeek runs locally as a Node web app on `127.0.0.1`, with a dashboard, an event API, and one fixed approval gate. This checkout started that server and called its HTTP API. A full browser click-through was not finished. There is no hosted deployment.
@@ -72,13 +112,16 @@ SpeakSeek runs locally as a Node web app on `127.0.0.1`, with a dashboard, an ev
 | Durable per-session event record (SQLite, WAL) with ordering, duplicate rejection, and session isolation | **Built.** Unit tests passed, and this checkout read 9 persisted sample events from the local database |
 | Status answers from the record, with timestamp, fresh / stale / unknown | **Built and observed** over loopback with the model off |
 | Typed questions | **Built and observed** via `POST /api/question` |
-| Browser push-to-talk (feature-detected, review before submit) and read-aloud via `speechSynthesis` | **Built in the page.** Microphone and audible playback were **not** verified. Typing remains the path that was checked |
+| Browser push-to-talk (feature-detected, review before submit) and read-aloud via `speechSynthesis` | **Built in the page.** Uses the computer's selected mic and speaker, so AirPods are used only when the system selected them. Headset hardware was **not** verified |
 | Optional Belweave/Kai-4 call that may only accept the single supplied evidence item; visible wording stays the deterministic record | **Built.** Automated tests use mocks. **No live model call was made here** (no key on this machine). A missing or failed model shows a stored-event fallback |
 | Notify gate: one-use, action-bound, ten-minute, fail-closed | **Built.** Tests cover the contract with stand-ins. **This checkout's live gate failed closed** because the Notify CLI was not installed. No phone round trip |
 | Notify alerts for completion, failure, and decision events | **Built**, off by default, not sent here |
 | Generic authenticated event adapter (`POST /api/events`, `npm run report-event`) | **Built.** Not a native Codex or Grok Bot connector |
 | Optional limited Cursor `stop` hook | **Built and unit-tested** against a fixture. Not run inside a live Cursor session |
 | Clearly labeled **SIMULATED** samples and simulated Approve / Deny / Timeout | **Built and observed.** They do not write the demo file |
+| Read-only `scripts/status-line.mjs` for one recorded sentence, loopback only | **Built and tested** here. `--speak` is macOS `/usr/bin/say` and was **not** run on a Mac |
+| Same-Mac Shortcut: Siri's own "Hey Siri" / "Siri", then the shortcut name | **You install it** from the steps above. Not installed or run in this checkout |
+| "Hey Agent X" wake phrase, iPhone Siri, or Google Home reaching this server | **Not available.** The server is loopback-only. No custom AirPods wake word |
 | "Hey Google" / Google Assistant | **Not built.** Product vision only |
 | Native Grok Bot, Codex, or broad Cursor telemetry | **Not built** |
 | Resuming or controlling a coding agent after approval | **Not built.** The gate does not resume an agent |
@@ -109,7 +152,7 @@ flowchart LR
 
 **Answers.** The words you see are built from the selected session's last state, UTC time, summary, and freshness. They work with the model off, which is how this checkout answered. If Belweave is configured, the request is `/chat/completions` with `max_tokens: 512` and a 20-second timeout. The model is given the redacted question (at most 200 characters) and one redacted copy of that deterministic record. It must return JSON selecting that single evidence item. Any other shape, tool call, empty, truncated, or HTTP error falls back visibly. Free-form model prose is not displayed. The model does not write a new status and cannot approve an action.
 
-**Voice.** The page looks for the browser's speech recognition. If it is missing or permission is denied, the question box still works. Captured speech is text you can edit before Ask. Read aloud uses `speechSynthesis`, with Stop / mute. Asking does not approve.
+**Voice.** The page looks for the browser's speech recognition. If it is missing or permission is denied, the question box still works. Captured speech is text you can edit before Ask. Read aloud uses `speechSynthesis`, with Stop / mute. Both follow the selected microphone and speaker. Asking does not approve, and there is no "Hey Agent X" wake phrase. `npm run status` prints session ids. `node scripts/status-line.mjs --label "Your task"` prints one recorded sentence from loopback only.
 
 **The approval gate.** Each real decision binds a random 256-bit id (also the Notify idempotency key), the session, one constant action, the SHA-256 of the fixed parameters, and a ten-minute expiry. The server asks Notify with `notify send ask … --approval --idempotency-key … --expires-in 10m`, stores the returned interaction id, and waits. Only a successful result for that same interaction, kind `approval`, status `approved`, response `approve`, inside the window, can be consumed. Consumption is one conditional SQLite update before any file write. Four worker threads racing one decision are covered by the tests.
 
@@ -177,7 +220,8 @@ About **1:57 PM CST on Nov 7, 2026**, on Node **v24.22.1**. This replaces the ea
 |---|---|
 | Production build | **Passed** (Node's TypeScript transform; it prints an experimental-feature warning) |
 | `npm run typecheck` | **Passed**, after a type-only fix so Notify exit code `3` still type-checks as credentials |
-| `npm test` | **50 passed, 0 failed, 0 skipped.** Includes loopback HTTP with restart, and a real child process |
+| `npm test` at about 1:57 PM CST | **50 passed, 0 failed, 0 skipped** before the AirPods follow-up |
+| `npm test` after `scripts/status-line.mjs` | **52 passed, 0 failed, 0 skipped** on Node v24.22.1. Two new tests check that the command refuses non-loopback targets and prints one recorded sentence without creating a decision. `--speak` on this Linux machine said it did not speak. No AirPods and no Mac `say` run |
 | `GET /api/health` and `GET /` on `127.0.0.1:5177` | **200.** SQLite, Belweave unconfigured, Notify CLI not installed |
 | Selected sessions, model-off question, simulated approve/deny/timeout, sample real-gate 409, local-demo real gate failed closed, no output file | **Observed** over HTTP |
 | SQLite rows after the run | **9 events** in WAL. Startup recovery fail-closes leftover `pending` and `approved` decisions |
@@ -188,7 +232,7 @@ About **1:57 PM CST on Nov 7, 2026**, on Node **v24.22.1**. This replaces the ea
 ## What's next
 
 1. A browser walkthrough of the same demo, then one deliberate Notify approval that creates the single timestamp file and a denial that does not. Not done yet.
-2. A voice-assistant front door so a spoken "how's Agent X?" can reach this status answer. Approvals stay on the phone. Not built.
+2. Try the same-Mac shortcut on real AirPods. The script is in the repo. The shortcut, Siri, and the headphones were not run here. An iPhone or Google speaker still needs a reachable authenticated backend. Not built. Approvals stay on the phone.
 3. Native adapters that post `started`, `progress`, `decision`, and `completed` from a coding agent. The generic ingest adapter is not that connector.
 4. If the gate grows, a small allowlist of reviewable actions, each with its own parameter hash and its own approval. Still not arbitrary commands, and still not "resume the agent."
 5. Optional hosting only with real authentication and storage you control. Not available now.
