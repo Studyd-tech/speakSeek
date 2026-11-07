@@ -1,0 +1,1 @@
+{"conversation_id":"conversation-123","generation_id":"generation-456","model":"example-model","hook_event_name":"stop","cursor_version":"1.7.2","workspace_roots":["/example/project"],"user_email":null,"transcript_path":null,"status":"completed","loop_count":0}
