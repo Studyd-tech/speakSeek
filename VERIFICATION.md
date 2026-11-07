@@ -1,5 +1,9 @@
 # Observed verification — 2026-11-07
 
+## AirPods follow-up
+
+Node v24.22.1. `tsc --noEmit` passed. `npm test` reported **52 passed, 0 failed, 0 skipped**. The two added tests run `scripts/status-line.mjs` against loopback: a foreign host is refused, and a recorded session prints its deterministic sentence without inserting a decision. `--speak` on this Linux host reported that macOS `say` was not used. No AirPods, no Mac shortcut, and no Siri run were available. The approval gate was not changed.
+
 ## This SpeakSeek checkout (about 1:57 PM CST)
 
 Node **v24.22.1**. `npm run typecheck` passed after one type-only correction in `src/notify.ts` so a numeric Notify exit code remains comparable to `3`. `npm test` then reported **50 passed, 0 failed, 0 skipped**, including the loopback HTTP/restart test and the real child-process CLI test. Those two were the tests the Codex sandbox had skipped.
