@@ -1,0 +1,10 @@
+import {Model} from '../dist/src/model.js';
+import {Store,seed} from '../dist/src/store.js';
+import {mkdtempSync,rmSync,writeFileSync,mkdirSync} from 'node:fs';
+import {join} from 'node:path';
+const dir=mkdtempSync(join(process.cwd(),'.local-smoke-'));
+const store=new Store(join(dir,'smoke.sqlite'));seed(store);
+const model=new Model({key:process.env.BELWEAVE_API_KEY,base:process.env.BELWEAVE_BASE_URL,model:process.env.BELWEAVE_MODEL});
+const result=await model.answer(store.snapshot('sample-checkout'),'What is the last observed state?');
+const report={testedAt:new Date().toISOString(),keyPresent:!!process.env.BELWEAVE_API_KEY,liveVerified:!result.fallback,source:result.source,reason:result.reason,failure:model.lastFailure};
+mkdirSync('artifacts',{recursive:true});writeFileSync('artifacts/model-smoke.json',JSON.stringify(report,null,2)+'\n');console.log(JSON.stringify(report,null,2));store.close();rmSync(dir,{recursive:true,force:true});
