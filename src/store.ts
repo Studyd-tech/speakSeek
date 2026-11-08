@@ -1,4 +1,5 @@
 import {DatabaseSync} from 'node:sqlite';
+import {BUDGET_SCHEMA} from './budget.js';
 import {mkdirSync} from 'node:fs';
 import {dirname} from 'node:path';
 import {assert,validateEvent,type PulseEvent,type StoredEvent,type Snapshot} from './core.js';
@@ -11,7 +12,7 @@ export class Store {
  CREATE TABLE IF NOT EXISTS decisions(id TEXT PRIMARY KEY, session TEXT NOT NULL REFERENCES sessions(id), action TEXT NOT NULL,paramsHash TEXT NOT NULL,created INTEGER NOT NULL,expires INTEGER NOT NULL,state TEXT NOT NULL,simulated INTEGER NOT NULL,interaction TEXT UNIQUE, reason TEXT NOT NULL DEFAULT '',executed INTEGER NOT NULL DEFAULT 0);
  CREATE TABLE IF NOT EXISTS notifications(key TEXT PRIMARY KEY, session TEXT NOT NULL,created INTEGER NOT NULL,state TEXT NOT NULL);
  CREATE TABLE IF NOT EXISTS settings(key TEXT PRIMARY KEY,value TEXT NOT NULL);
- `);}
+ `);this.db.exec(BUDGET_SCHEMA);}
  close(){if(this.db.isOpen)this.db.close()}
  session(id:string){return this.db.prepare('SELECT * FROM sessions WHERE id=?').get(id) as {id:string;agent:string;label:string;simulated:number}|undefined}
  addSession(id:string,agent:string,label:string,simulated=false){this.db.prepare('INSERT OR IGNORE INTO sessions VALUES(?,?,?,?)').run(id,agent,label,Number(simulated))}
@@ -38,7 +39,7 @@ export class Store {
  sessions(now=Date.now()){return (this.db.prepare('SELECT id FROM sessions ORDER BY simulated DESC,label').all() as {id:string}[]).map(s=>this.snapshot(s.id,now))}
  setting(key:string,fallback:string){return (this.db.prepare('SELECT value FROM settings WHERE key=?').get(key) as {value:string}|undefined)?.value??fallback}
  setSetting(key:string,v:string){this.db.prepare('INSERT INTO settings VALUES(?,?) ON CONFLICT(key) DO UPDATE SET value=excluded.value').run(key,v)}
- recover(){this.db.prepare("UPDATE decisions SET state='failed',reason='Server restarted; uncertain request blocked. Create a new decision.' WHERE state IN ('pending','approved')").run();}
+ recover(){this.db.exec("UPDATE token_reservations SET state='uncertain' WHERE state='active'; UPDATE token_extensions SET state='failed',reason='Server restarted; request must not resume permission' WHERE state='pending'; UPDATE token_alerts SET state='uncertain' WHERE state='sending';");this.db.prepare("UPDATE decisions SET state='failed',reason='Server restarted; uncertain request blocked. Create a new decision.' WHERE state IN ('pending','approved')").run();}
 }
 export function seed(store:Store,now=Date.now()){
  const samples=[{id:'sample-checkout',label:'Checkout recovery',offset:0,events:[['started','Investigating the checkout retry failure'],['progress','Reproduced the intermittent timeout in the sample task'],['progress','Added retry handling and recorded passing checks'],['decision','Waiting for review of the harmless timestamp demo']]},{id:'sample-complete',label:'Search accessibility',offset:240_000,events:[['started','Auditing search keyboard navigation'],['progress','Added focus handling and accessible labels'],['completed','Search accessibility task finished; recorded checks passed']]},{id:'sample-failed',label:'API contract check',offset:420_000,events:[['started','Checking the sample API contract'],['failed','Contract check failed: response missing an expected field']]}];
